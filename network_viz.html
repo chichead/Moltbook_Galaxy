@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moltbook Galaxy: Influence Map</title>
+    <!-- D3 for Zoom/Pan Logic -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Load Galaxy Data -->
+    <script src="galaxy_data.js"></script>
+    <script src="data/galaxy_timelapse.js"></script>
+
+    <style>
+        :root {
+            --bg-deep: #020617;
+            --sidebar-bg: rgba(15, 23, 42, 0.85);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent: #38bdf8;
+            --border: rgba(51, 65, 85, 0.5);
+            --gold: #fbbf24;
+        }
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-deep);
+            color: var(--text-primary);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+        }
+
+        #app {
+            display: flex;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #sidebar {
+            width: 320px;
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid var(--border);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+            box-shadow: 20px 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        #viewport {
+            flex-grow: 1;
+            position: relative;
+            background: radial-gradient(circle at center, #1e293b 0%, #020617 100%);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        h1 {
+            font-size: 1.6rem;
+            margin: 0;
+            background: linear-gradient(135deg, #38bdf8, #818cf8, #fbbf24);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+
+        /* Search Section */
+        .search-box {
+            position: relative;
+            margin-bottom: 24px;
+        }
+
+        #agent-search {
+            width: 100%;
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: white;
+            font-size: 0.95rem;
+            box-sizing: border-box;
+            transition: all 0.2s;
+        }
+
+        #agent-search:focus {
+            outline: none;
+            border-color: var(--accent);
+            background: rgba(30, 41, 59, 0.8);
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+        }
+
+        .search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #1e293b;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-top: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            z-index: 1000;
+        }
+
+        .search-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .search-item:hover {
+            background: #334155;
+        }
+
+        /* Controls */
+        .control-section {
+            margin-bottom: 24px;
+        }
+
+        h3 {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        button {
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        button:hover {
+            background: #334155;
+            border-color: #475569;
+        }
+
+        button.active {
+            border-color: var(--accent);
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--accent);
+        }
+
+        /* Legend */
+        .legend-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            font-size: 0.75rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        /* Tooltip */
+        #tooltip {
+            position: absolute;
+            pointer-events: none;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--accent);
+            padding: 15px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            min-width: 180px;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .tooltip-header {
+            font-weight: 800;
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+            color: var(--accent);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 5px;
+        }
+
+        .tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .tooltip-label {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+
+        .tooltip-value {
+            font-weight: 600;
+        }
+
+        .stat-badge {
+            margin-top: auto;
+            padding: 16px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            font-size: 0.8rem;
+        }
+
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-deep);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            transition: opacity 0.5s;
+        }
+
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #1e293b;
+            border-bottom-color: var(--accent);
+            border-radius: 50%;
+            animation: rotation 1s linear infinite;
+        }
+
+        @keyframes rotation {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Timelapse Controls */
+        #timelapse-bar {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            max-width: 90%;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            padding: 12px 24px;
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            z-index: 500;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+            transition: opacity 0.3s;
+        }
+
+        #play-btn {
+            background: var(--accent);
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: #000;
+            cursor: pointer;
+            padding: 0;
+            flex-shrink: 0;
+            transition: transform 0.2s, background 0.2s;
+        }
+
+        #play-btn:hover {
+            transform: scale(1.1);
+            background: #7dd3fc;
+        }
+
+        .time-info {
+            display: flex;
+            flex-direction: column;
+            min-width: 100px;
+        }
+
+        .time-date {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .time-hour {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        input[type=range] {
+            flex-grow: 1;
+            -webkit-appearance: none;
+            background: transparent;
+            height: 6px;
+            cursor: pointer;
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            background: #334155;
+            border-radius: 3px;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: var(--text-primary);
+            margin-top: -6px;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            transition: transform 0.1s;
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        /* Activity Pulse Animation */
+        .pulse-text {
+            animation: pulse-gold 1s infinite;
+        }
+
+        @keyframes pulse-gold {
+            0% {
+                text-shadow: 0 0 0 rgba(251, 191, 36, 0);
+            }
+
+            50% {
+                text-shadow: 0 0 10px rgba(251, 191, 36, 0.8);
+            }
+
+            100% {
+                text-shadow: 0 0 0 rgba(251, 191, 36, 0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="loading-overlay">
+        <div class="loader"></div>
+        <p style="margin-top: 20px; color: var(--text-secondary); letter-spacing: 0.1em;">INITIALIZING GALAXY...</p>
+    </div>
+
+    <div id="app">
+        <aside id="sidebar">
+            <h1>Moltbook Galaxy</h1>
+            <p class="subtitle">21,534 Agents • Influence Mapping</p>
+
+            <div class="search-box">
+                <input type="text" id="agent-search" placeholder="Search agent name..." autocomplete="off">
+                <div id="search-results" class="search-results"></div>
+            </div>
+
+            <div class="control-section">
+                <h3>View Mode</h3>
+                <div class="btn-group">
+                    <button id="btn-color-persona" class="active" onclick="setViewMode('persona')">
+                        <span>🎨</span> Color: Persona
+                    </button>
+                    <button id="btn-color-faction" onclick="setViewMode('faction')">
+                        <span>🛡️</span> Color: Faction
+                    </button>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Legend: Personas</h3>
+                <div class="legend-grid" id="persona-legend">
+                    <!-- Filled by JS -->
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Legend: Top Factions</h3>
+                <div class="legend-grid" id="faction-legend">
+                    <div class="legend-item">
+                        <div class="dot" style="background: #ff595e"></div> 3 (Lead)
+                    </div>
+                    <div class="legend-item">
+                        <div class="dot" style="background: #ffca3a"></div> 2 (Tech)
+                    </div>
+                    <div class="legend-item">
+                        <div class="dot" style="background: #8ac926"></div> 4 (Econ)
+                    </div>
+                    <div class="legend-item">
+                        <div class="dot" style="background: #1982c4"></div> 0 (Public)
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-badge">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <span>Visible Stars:</span>
+                    <span id="visible-count" style="color: var(--accent); font-weight: bold;">21,534</span>
+                </div>
+                <p style="margin: 0; font-size: 0.7rem; color: var(--text-secondary);">
+                    Use Scroll to Zoom, Drag to Move.<br>Hover stars to reveal agent profile.
+                </p>
+            </div>
+        </aside>
+
+        <main id="viewport">
+            <canvas id="galaxy-canvas"></canvas>
+            <div id="tooltip"></div>
+
+            <div id="timelapse-bar">
+                <button id="play-btn" onclick="togglePlay()">▶</button>
+                <div class="time-info">
+                    <span id="display-date" class="time-date">Loading...</span>
+                    <span id="display-hour" class="time-hour">--:00</span>
+                </div>
+                <input type="range" id="time-slider" min="0" max="100" value="0" step="0.1">
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Configuration
+        const PALETTE = {
+            persona: {
+                "Revolutionary": "#ef476f",
+                "Philosopher": "#ffd166",
+                "Developer": "#06d6a0",
+                "Investor": "#118ab2",
+                "Theologist": "#9b5de5",
+                "Mixed": "#4b5563" // Changed to gray
+            },
+            faction: {
+                "3": "#ff595e", // Leader
+                "2": "#ffca3a", // Tech
+                "0": "#1982c4", // Public
+                "4": "#8ac926", // Econ
+                "1": "#6a4c93",
+                "new": "#ffffff", // Bright white for newcomers
+                "default": "#4b5563"
+            }
+        };
+
+        const canvas = document.getElementById('galaxy-canvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const tooltip = document.getElementById('tooltip');
+        let width, height;
+        let transform = d3.zoomIdentity;
+        let viewMode = 'persona'; // persona | faction
+        let hoverAgent = null;
+
+        // Timelapse State
+        let timelapseActive = false;
+        let currentTimeIdx = 0; // Float index for smooth interpolation
+        let isPlaying = false;
+        let animationFrameId = null;
+        let activityMap = new Map(); // agentId -> [scores per hour]
+        let timeSteps = [];
+
+        // Init Performance
+        function resize() {
+            width = canvas.parentElement.clientWidth;
+            height = canvas.parentElement.clientHeight;
+            canvas.width = width * window.devicePixelRatio;
+            canvas.height = height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            draw();
+        }
+
+        window.addEventListener('resize', resize);
+
+        // Zoom setup
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 50])
+            .on('zoom', (event) => {
+                transform = event.transform;
+                draw();
+            });
+
+        d3.select(canvas).call(zoom);
+
+        // Data processing
+        function init() {
+            // Fill Persona Legend
+            const leg = document.getElementById('persona-legend');
+            Object.entries(PALETTE.persona).forEach(([name, col]) => {
+                leg.innerHTML += `<div class="legend-item"><div class="dot" style="background: ${col}"></div> ${name}</div>`;
+            });
+
+            // Process Evolution Data
+            if (typeof GALAXY_EVOLUTION !== 'undefined') {
+                processEvolutionData();
+            } else {
+                document.getElementById('timelapse-bar').style.display = 'none';
+            }
+
+            resize();
+            // Initial transform to center
+            d3.select(canvas).call(zoom.transform, d3.zoomIdentity);
+
+            document.getElementById('loading-overlay').style.opacity = '0';
+            setTimeout(() => document.getElementById('loading-overlay').style.display = 'none', 500);
+
+            // Initial draw
+            draw();
+        }
+
+
+        let evolutionFrames = [];
+        let maxTimeIdx = 0;
+
+        function processEvolutionData() {
+            evolutionFrames = GALAXY_EVOLUTION; // [ { time, data: [ {id, s, p...} ] } ]
+            console.log("Loaded Evolution Frames:", evolutionFrames.length);
+            maxTimeIdx = evolutionFrames.length - 1;
+
+            const slider = document.getElementById('time-slider');
+            slider.max = maxTimeIdx * 100; // 100 steps per hour
+            slider.value = 0;
+
+            slider.addEventListener('input', (e) => {
+                // Pause if user drags
+                isPlaying = false;
+                document.getElementById('play-btn').textContent = '▶';
+                currentTimeIdx = parseFloat(e.target.value) / 100;
+                updateTimeDisplay(currentTimeIdx);
+            });
+
+            // Initialize to first frame
+            currentTimeIdx = 0;
+            updateTimeDisplay(0);
+        }
+
+        function updateTimeDisplay(idxFloat) {
+            const frameIdx = Math.floor(idxFloat);
+            if (evolutionFrames[frameIdx]) {
+                const tStr = evolutionFrames[frameIdx].time; // "2026-02-03T05:00" (UTC)
+
+                // Parse and Convert to KST (UTC+9)
+                // tStr is ISO-like "YYYY-MM-DDTHH:00"
+                const dt = new Date(tStr + ":00Z"); // Treat inputs as UTC
+
+                // Add 9 hours
+                dt.setHours(dt.getHours() + 9);
+
+                // Format
+                const displayDate = dt.toISOString().split('T')[0];
+                const displayHour = String(dt.getUTCHours()).padStart(2, '0') + ":00";
+
+                document.getElementById('display-date').textContent = displayDate;
+                document.getElementById('display-hour').textContent = displayHour;
+
+                // Update Timeline Bar
+                const percent = (idxFloat / maxTimeIdx) * 100;
+                document.getElementById('timeline-progress').style.width = `${percent}%`;
+            }
+        }
+
+        // Cache for interpolation
+        let cachedFrameIndex = -1;
+        let cachedFrameMap = null;
+
+        function getFrameData(frameIdx) {
+            if (frameIdx === cachedFrameIndex) return cachedFrameMap;
+            const frame = evolutionFrames[frameIdx];
+            if (!frame) return null;
+
+            const map = new Map();
+            frame.data.forEach(d => map.set(d.id, d));
+            cachedFrameIndex = frameIdx;
+            cachedFrameMap = map;
+            return map;
+        }
+
+        function draw() {
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.save();
+            ctx.translate(transform.x, transform.y);
+            ctx.scale(transform.k, transform.k);
+
+            // Center mapping: (0,0) data -> screen center
+            ctx.translate(width / 2, height / 2);
+            const dataScale = 5;
+
+            for (let i = 0; i < GALAXY_DATA.length; i++) {
+                const d = GALAXY_DATA[i];
+                const x = d.x * dataScale;
+                const y = d.y * dataScale;
+
+                // SIMPLIFIED: Just render baseline data for now
+                // TODO: Add evolution interpolation later
+                const color = viewMode === 'persona'
+                    ? PALETTE.persona[d.p] || PALETTE.persona.Mixed || "#999"
+                    : PALETTE.faction[d.f] || PALETTE.faction.default;
+
+                // Use baseline status index
+                let baseSize = 0.5 + (d.s * 0.82);
+                const r = baseSize / Math.sqrt(transform.k);
+
+                ctx.globalAlpha = 1.0;
+                ctx.shadowBlur = baseSize * 2;
+                ctx.shadowColor = color;
+                ctx.fillStyle = color;
+
+                // Supernova Effect for New Agents
+                // Disabled for now - needs proper time tracking
+                let isSupernova = false;
+                // if (d.birth) {
+                //     const currentTime = timeSteps[Math.floor(currentTimeIdx)];
+                //     if (currentTime && d.birth.startsWith(currentTime.substring(0, 13))) {
+                //         isSupernova = true;
+                //     }
+                // }
+
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+
+                if (isSupernova) {
+                    ctx.fillStyle = "#ffffff";
+                    ctx.shadowBlur = 15 * r;
+                    ctx.shadowColor = "#ffffff";
+                } else {
+                    ctx.fillStyle = color;
+                    if (d.s > 5) {
+                        ctx.shadowBlur = 4 * r;
+                        ctx.shadowColor = color;
+                    } else {
+                        ctx.shadowBlur = 0;
+                    }
+                }
+
+                ctx.fill();
+
+                if (hoverAgent === d) {
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 1 / transform.k;
+                    ctx.stroke();
+                }
+            }
+
+            ctx.restore();
+        }
+
+        // Hover detection
+        canvas.addEventListener('mousemove', (e) => {
+            const [mx, my] = d3.pointer(e);
+
+            // Correct Reverse transform
+            const dataScale = 5;
+            const lx = (mx - transform.x) / transform.k;
+            const ly = (my - transform.y) / transform.k;
+            const tx = lx - width / 2;
+            const ty = ly - height / 2;
+
+            let closest = null;
+            let minDist = 8 / transform.k; // Hit radius
+
+            for (let i = 0; i < GALAXY_DATA.length; i++) {
+                const d = GALAXY_DATA[i];
+                const dx = d.x * dataScale - tx;
+                const dy = d.y * dataScale - ty;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < minDist) {
+                    minDist = dist;
+                    closest = d;
+                }
+            }
+
+            if (closest) {
+                hoverAgent = closest;
+                // Tooltip follows mx, my which are relative to the viewport/canvas
+                showTooltip(mx, my, closest);
+                canvas.style.cursor = 'pointer';
+            } else {
+                hoverAgent = null;
+                tooltip.style.display = 'none';
+                canvas.style.cursor = 'crosshair';
+            }
+            draw();
+        });
+
+        function showTooltip(x, y, d) {
+            tooltip.style.display = 'block';
+
+            // Constrain tooltip within the viewport
+            let left = x + 20;
+            let top = y + 20;
+            if (left + 220 > width) left = x - 220;
+            if (top + 180 > height) top = y - 180;
+
+            tooltip.style.left = left + 'px';
+            tooltip.style.top = top + 'px';
+
+            tooltip.innerHTML = `
+                <div class="tooltip-header">${d.id}</div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Persona</span>
+                    <span class="tooltip-value">${d.p}</span>
+                </div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Faction</span>
+                    <span class="tooltip-value">#${d.f}</span>
+                </div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Status Index</span>
+                    <span class="tooltip-value" style="color: var(--gold)">${d.s.toFixed(2)}</span>
+                </div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">PageRank</span>
+                    <span class="tooltip-value">${(d.pr * 1000).toFixed(4)}</span>
+                </div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Interactions</span>
+                    <span class="tooltip-value">${d.w.toLocaleString()}</span>
+                </div>
+            `;
+        }
+
+        // Search logic
+        const searchInput = document.getElementById('agent-search');
+        const resultsBox = document.getElementById('search-results');
+
+        searchInput.addEventListener('input', (e) => {
+            const val = e.target.value.toLowerCase();
+            if (val.length < 2) {
+                resultsBox.style.display = 'none';
+                return;
+            }
+
+            const matches = GALAXY_DATA
+                .filter(d => d.id.toLowerCase().includes(val))
+                .slice(0, 10);
+
+            if (matches.length > 0) {
+                resultsBox.innerHTML = matches.map(m => `
+                    <div class="search-item" onclick="flyTo('${m.id}')">
+                        <b>${m.id}</b> <span style="font-size: 0.7rem; color: #94a3b8">(${m.p})</span>
+                    </div>
+                `).join('');
+                resultsBox.style.display = 'block';
+            } else {
+                resultsBox.style.display = 'none';
+            }
+        });
+
+        function flyTo(agentId) {
+            const agent = GALAXY_DATA.find(d => d.id === agentId);
+            if (!agent) return;
+
+            resultsBox.style.display = 'none';
+            searchInput.value = agentId;
+
+            const dataScale = 5;
+            const k = 15; // Zoom Level
+
+            // Correct transform to center data point (agent.x, agent.y) in the Canvas
+            // ScreenX = transform.k * (width/2 + agent.x * dataScale) + transform.x = width / 2
+            const x = (width / 2) * (1 - k) - (agent.x * dataScale * k);
+            const y = (height / 2) * (1 - k) - (agent.y * dataScale * k);
+
+            const newTransform = d3.zoomIdentity.translate(x, y).scale(k);
+
+            d3.select(canvas).transition()
+                .duration(1500)
+                .call(zoom.transform, newTransform);
+        }
+
+        window.flyTo = flyTo;
+
+        function setViewMode(mode) {
+            viewMode = mode;
+            document.querySelectorAll('.control-section button').forEach(b => b.classList.remove('active'));
+            document.getElementById(`btn-color-${mode}`).classList.add('active');
+            draw();
+        }
+        window.setViewMode = setViewMode;
+
+        // Playback Logic
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            document.getElementById('play-btn').textContent = isPlaying ? "⏸" : "▶";
+
+            if (isPlaying) {
+                // If at end, loop to start
+                if (currentTimeIdx >= timeSteps.length - 1) {
+                    currentTimeIdx = 0;
+                    document.getElementById('time-slider').value = 0;
+                }
+                playTick();
+            }
+        }
+        window.togglePlay = togglePlay;
+
+        function playTick() {
+            if (!isPlaying) return;
+
+            // Speed: 0.1 hour per frame? Too fast. 0.05 per frame
+            currentTimeIdx += 0.05;
+
+            if (currentTimeIdx >= timeSteps.length - 1) {
+                currentTimeIdx = timeSteps.length - 1;
+                isPlaying = false;
+                document.getElementById('play-btn').textContent = "▶";
+            }
+
+            document.getElementById('time-slider').value = currentTimeIdx;
+            updateTimeDisplay();
+            draw();
+
+            requestAnimationFrame(playTick);
+        }
+
+        // Init
+        window.onload = init;
+    </script>
+</body>
+
+</html>
