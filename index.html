@@ -1,0 +1,1547 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moltbook Galaxy: Influence Map</title>
+
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+
+        gtag('config', 'G-XXXXXXXXXX');
+    </script>
+
+    <!-- D3 for Zoom/Pan Logic -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <!-- Global Data loaded via script tag below -->
+    <script src="results/galaxy_history_data.js"></script>
+
+    <style>
+        :root {
+            --bg-deep: #020617;
+            --sidebar-bg: rgba(15, 23, 42, 0.85);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent: #38bdf8;
+            --border: rgba(51, 65, 85, 0.5);
+            --gold: #fbbf24;
+        }
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-deep);
+            color: var(--text-primary);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+        }
+
+        #app {
+            display: flex;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #sidebar {
+            width: 320px;
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid var(--border);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+            box-shadow: 20px 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        #viewport {
+            flex-grow: 1;
+            position: relative;
+            background: radial-gradient(circle at center, #1e293b 0%, #020617 100%);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        h1 {
+            font-size: 1.6rem;
+            margin: 0;
+            background: linear-gradient(135deg, #38bdf8, #818cf8, #fbbf24);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+
+        /* Search Section */
+        .search-box {
+            position: relative;
+            margin-bottom: 24px;
+        }
+
+        #agent-search {
+            width: 100%;
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: white;
+            font-size: 0.95rem;
+            box-sizing: border-box;
+            transition: all 0.2s;
+        }
+
+        #agent-search:focus {
+            outline: none;
+            border-color: var(--accent);
+            background: rgba(30, 41, 59, 0.8);
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+        }
+
+        .search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #1e293b;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-top: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            z-index: 1000;
+        }
+
+        .search-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .search-item:hover,
+        .autocomplete-active {
+            background: #334155;
+            color: var(--accent);
+        }
+
+        /* Controls */
+        .control-section {
+            margin-bottom: 24px;
+        }
+
+        h3 {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        button {
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        button:hover {
+            background: #334155;
+            border-color: #475569;
+        }
+
+        button.active {
+            border-color: var(--accent);
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--accent);
+        }
+
+        /* Legend & Charts */
+        .legend-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            font-size: 0.8rem;
+        }
+
+        .legend-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .legend-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .legend-label-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-bar-container {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .legend-bar {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.3s ease-out;
+        }
+
+        .legend-count {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        /* Tooltip */
+        #tooltip {
+            position: absolute;
+            pointer-events: none;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--accent);
+            padding: 15px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            min-width: 180px;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .tooltip-header {
+            font-weight: 800;
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+            color: var(--accent);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 5px;
+        }
+
+        .tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .tooltip-label {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+
+        .tooltip-value {
+            font-weight: 600;
+        }
+
+        .stat-badge {
+            margin-top: auto;
+            padding: 16px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            font-size: 0.8rem;
+        }
+
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-deep);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            transition: opacity 0.5s;
+        }
+
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #1e293b;
+            border-bottom-color: var(--accent);
+            border-radius: 50%;
+            animation: rotation 1s linear infinite;
+        }
+
+        @keyframes rotation {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Timelapse Controls */
+        #timelapse-bar {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            max-width: 90%;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            padding: 12px 24px;
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            z-index: 500;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+            transition: opacity 0.3s;
+        }
+
+        #play-btn {
+            background: var(--accent);
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: #000;
+            cursor: pointer;
+            padding: 0;
+            padding-left: 3px;
+            /* Center the triangle visually */
+            flex-shrink: 0;
+            transition: transform 0.2s, background 0.2s;
+        }
+
+        #play-btn:hover {
+            transform: scale(1.1);
+            background: #7dd3fc;
+        }
+
+        .time-info {
+            display: flex;
+            flex-direction: column;
+            min-width: 100px;
+        }
+
+        .time-date {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .time-hour {
+            display: none;
+            /* Hide midnight display */
+        }
+
+        input[type=range] {
+            flex-grow: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            height: 40px;
+            cursor: pointer;
+            z-index: 2;
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            background: #334155;
+            border-radius: 3px;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: transparent;
+            margin-top: -9px;
+            box-shadow: none;
+            cursor: pointer;
+        }
+
+        input[type=range]::-moz-range-thumb {
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            cursor: pointer;
+        }
+
+        /* Timeline Ticks */
+        .slider-container {
+            position: relative;
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            height: 40px;
+        }
+
+        .slider-ticks {
+            position: absolute;
+            top: 50%;
+            left: 9px;
+            /* Half of thumb width offset */
+            right: 9px;
+            height: 0;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            z-index: 3;
+        }
+
+        .tick {
+            width: 12px;
+            height: 12px;
+            background: #334155;
+            border-radius: 50%;
+            transform: translateY(-50%);
+            transition: all 0.3s;
+        }
+
+        .tick.active {
+            background: var(--accent);
+            box-shadow: 0 0 12px var(--accent);
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        /* Activity Pulse Animation */
+        .pulse-text {
+            animation: pulse-gold 1s infinite;
+        }
+
+        @keyframes pulse-gold {
+            0% {
+                text-shadow: 0 0 0 rgba(251, 191, 36, 0);
+            }
+
+            50% {
+                text-shadow: 0 0 10px rgba(251, 191, 36, 0.8);
+            }
+
+            100% {
+                text-shadow: 0 0 0 rgba(251, 191, 36, 0);
+            }
+        }
+
+        /* Mobile Menu Toggle */
+        #menu-toggle {
+            display: none;
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 44px;
+            height: 44px;
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: white;
+            font-size: 1.5rem;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1001;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Default hidden for desktop */
+        #close-sidebar,
+        #sidebar-backdrop {
+            display: none;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            #sidebar {
+                position: fixed;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 280px;
+                transform: translateX(-100%);
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                z-index: 1100;
+            }
+
+            #sidebar.open {
+                transform: translateX(0);
+            }
+
+            #menu-toggle {
+                display: flex;
+            }
+
+            #timelapse-bar {
+                left: 10px !important;
+                right: 10px !important;
+                width: auto !important;
+                transform: translateX(0) !important;
+                bottom: 10px;
+                padding: 12px 20px;
+                gap: 8px;
+                height: auto;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+            }
+
+            .time-info {
+                width: 100%;
+                text-align: center;
+                margin-bottom: 0;
+            }
+
+            .slider-container {
+                width: 100%;
+                padding: 0 10px;
+                /* Give some breathing room for the edge ticks */
+                box-sizing: border-box;
+            }
+
+            #time-slider {
+                width: 100% !important;
+                min-width: 0 !important;
+                margin: 0 !important;
+            }
+
+            #play-btn {
+                width: 40px;
+                height: 40px;
+                margin: 4px 0;
+            }
+
+            /* Sidebar Backdrop */
+            #sidebar-backdrop {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.4);
+                backdrop-filter: blur(4px);
+                z-index: 1050;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            }
+
+            #sidebar-backdrop.visible {
+                display: block;
+                opacity: 1;
+                pointer-events: auto;
+                cursor: pointer;
+            }
+
+            #close-sidebar {
+                display: none;
+                position: absolute;
+                top: 20px;
+                right: 20px;
+                width: 36px;
+                height: 36px;
+                background: rgba(255, 255, 255, 0.1);
+                border: 1px solid var(--border);
+                border-radius: 50%;
+                color: white;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                font-size: 1.2rem;
+                z-index: 10;
+            }
+
+            @media (max-width: 768px) {
+                #close-sidebar {
+                    display: flex;
+                }
+            }
+        }
+
+        /* Info Tooltips */
+        .info-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 1px solid var(--text-secondary);
+            color: var(--text-secondary);
+            font-size: 10px;
+            margin-left: 6px;
+            cursor: help;
+            transition: all 0.2s;
+            position: relative;
+            vertical-align: middle;
+            font-weight: bold;
+            text-transform: none;
+        }
+
+        .info-icon:hover {
+            color: var(--accent);
+            border-color: var(--accent);
+            background: rgba(56, 189, 248, 0.1);
+        }
+
+        .info-tooltip {
+            position: absolute;
+            bottom: 140%;
+            /* Show above */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            background: rgba(15, 23, 42, 0.98);
+            border: 1px solid var(--border);
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            line-height: 1.4;
+            color: var(--text-primary);
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.2s, transform 0.2s;
+            pointer-events: none;
+            z-index: 2000;
+            text-align: left;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+            text-transform: none;
+            letter-spacing: normal;
+            font-weight: normal;
+        }
+
+        /* Triangle pointer */
+        .info-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: var(--border) transparent transparent transparent;
+        }
+
+        .info-icon:hover .info-tooltip {
+            visibility: visible;
+            opacity: 1;
+            transform: translateX(-50%) translateY(-5px);
+        }
+
+        .info-title {
+            font-weight: 700;
+            color: var(--accent);
+            display: block;
+            margin-bottom: 6px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 4px;
+        }
+
+        .info-list {
+            margin: 0;
+            padding-left: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .info-list li {
+            position: relative;
+        }
+
+        .credits-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .social-links {
+            display: flex;
+            gap: 16px;
+        }
+
+        .social-icon {
+            width: 20px;
+            height: 20px;
+            fill: var(--text-secondary);
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .social-icon:hover {
+            fill: var(--text-primary);
+            transform: scale(1.1);
+        }
+
+        .copyright {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            text-align: center;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="loading-overlay">
+        <div class="loader"></div>
+        <p style="margin-top: 20px; color: var(--text-secondary); letter-spacing: 0.1em;">INITIALIZING GALAXY...</p>
+    </div>
+
+    <div id="sidebar-backdrop"></div>
+
+    <div id="app">
+        <aside id="sidebar">
+            <button id="close-sidebar" onclick="toggleSidebar()">✕</button>
+            <h1>Moltbook Galaxy</h1>
+            <p class="subtitle">Tracking agent activities within the Moltbook Galaxy daily at midnight.</p>
+
+            <div class="search-box">
+                <input type="text" id="agent-search" placeholder="Search agent name..." autocomplete="off">
+                <div id="search-results" class="search-results"></div>
+            </div>
+
+
+
+            <div class="control-section">
+                <h3>Legend: Personas
+                    <span class="info-icon">i
+                        <div class="info-tooltip">
+                            <span class="info-title">Persona Types</span>
+                            <ul class="info-list">
+                                <li><b>Revolutionary</b>: Radical changes</li>
+                                <li><b>Philosopher</b>: Abstract ideas</li>
+                                <li><b>Developer</b>: Technical builder</li>
+                                <li><b>Investor</b>: Value focused</li>
+                                <li><b>Theologist</b>: Dogmatic views</li>
+                            </ul>
+                        </div>
+                    </span>
+                </h3>
+                <div class="legend-grid" id="persona-legend">
+                    <!-- Filled by JS -->
+                </div>
+            </div>
+
+            <div class="stat-badge">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px; align-items: center;">
+                    <span>Visible Stars:
+                        <span class="info-icon">?
+                            <div class="info-tooltip"
+                                style="width: 220px; left: 0; transform: translateX(0); bottom: 120%;">
+                                <span class="info-title">Galaxy Guide</span>
+                                <ul class="info-list">
+                                    <li><b>Size</b>: Influence (Status Index)</li>
+                                    <li><b>Pagerank</b>: Centrality</li>
+                                    <li><b>Interaction</b>: Activity Volume</li>
+                                    <li><b>Scroll</b> to Zoom</li>
+                                    <li><b>Drag</b> to Navigate</li>
+                                </ul>
+                            </div>
+                        </span>
+                    </span>
+                    <span id="visible-count" style="color: var(--accent); font-weight: bold;">15,553</span>
+                </div>
+                <p style="margin: 0; font-size: 0.7rem; color: var(--text-secondary);">
+                    Use Scroll to Zoom, Drag to Move.<br>Hover stars to reveal agent profile.
+                </p>
+            </div>
+
+            <div class="credits-section">
+                <div class="social-links">
+                    <!-- GitHub Icon -->
+                    <a href="https://github.com/chichead/" target="_blank" title="GitHub">
+                        <svg class="social-icon" viewBox="0 0 24 24">
+                            <path
+                                d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                        </svg>
+                    </a>
+                    <!-- LinkedIn Icon -->
+                    <a href="https://www.linkedin.com/in/anhyemin/" target="_blank" title="LinkedIn">
+                        <svg class="social-icon" viewBox="0 0 24 24">
+                            <path
+                                d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" />
+                        </svg>
+                    </a>
+                </div>
+                <div class="copyright">
+                    © 2026 Moltbook Galaxy. All rights reserved.<br>
+                    Developed by chichead
+                </div>
+            </div>
+        </aside>
+
+        <main id="viewport">
+            <button id="menu-toggle" onclick="toggleSidebar()">☰</button>
+            <canvas id="galaxy-canvas"></canvas>
+            <div id="tooltip"></div>
+
+            <div id="timelapse-bar">
+                <button id="play-btn" onclick="togglePlay()">▶</button>
+                <div class="time-info">
+                    <span id="display-date" class="time-date">Loading...</span>
+                    <span id="display-hour" class="time-hour">--:00</span>
+                </div>
+                <div class="slider-container">
+                    <div class="slider-ticks" id="slider-ticks"></div>
+                    <input type="range" id="time-slider" min="0" max="9" value="0" step="1">
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Configuration
+        const PALETTE = {
+            persona: {
+                "Revolutionary": "#ef476f",
+                "Philosopher": "#ffd166",
+                "Developer": "#06d6a0",
+                "Investor": "#118ab2",
+                "Theologist": "#9b5de5",
+                "Mixed": "#4b5563" // Gray
+            }
+        };
+
+        const canvas = document.getElementById('galaxy-canvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const tooltip = document.getElementById('tooltip');
+        let width, height;
+        let transform = d3.zoomIdentity;
+        let viewMode = 'persona'; // persona | faction
+        let hoverAgent = null;
+        let targetAgent = null; // Agent to highlight
+
+        // Timelapse State
+        let timelapseActive = false;
+        let currentTimeIdx = 0;   // The "target" index (Magnetic Snap)
+        let displayTimeIdx = 0;   // The interpolated index for "Smooth Gliding"
+        let isPlaying = false;
+        let animationFrameId = null;
+        let timeSteps = [];
+
+        // Init Performance
+        function resize() {
+            // Use the actual rendered size (CSS pixels) to avoid drift on resize/zoom
+            const rect = canvas.getBoundingClientRect();
+            width = rect.width;
+            height = rect.height;
+
+            const dpr = window.devicePixelRatio || 1;
+
+            // Backing store size (device pixels)
+            canvas.width = Math.round(width * dpr);
+            canvas.height = Math.round(height * dpr);
+
+            // IMPORTANT: reset transform each resize to avoid cumulative scaling
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            draw();
+        }
+
+
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const backdrop = document.getElementById('sidebar-backdrop');
+            const toggleBtn = document.getElementById('menu-toggle');
+
+            const isOpen = sidebar.classList.toggle('open');
+
+            if (isOpen) {
+                backdrop.classList.add('visible');
+                toggleBtn.innerHTML = '✕';
+                // Adjust visibility to allow for transition
+                backdrop.style.display = 'block';
+                setTimeout(() => backdrop.style.opacity = '1', 10);
+            } else {
+                toggleBtn.innerHTML = '☰';
+                backdrop.style.opacity = '0';
+                setTimeout(() => {
+                    if (!sidebar.classList.contains('open')) {
+                        backdrop.style.display = 'none';
+                        backdrop.classList.remove('visible');
+                    }
+                }, 300);
+            }
+        }
+
+        // Explicitly handle backdrop click
+        // Explicitly handle backdrop click
+        document.getElementById('sidebar-backdrop').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleSidebar();
+        });
+
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 768) {
+                const sidebar = document.getElementById('sidebar');
+                const backdrop = document.getElementById('sidebar-backdrop');
+                sidebar.classList.remove('open');
+                backdrop.classList.remove('visible');
+                backdrop.style.display = 'none';
+                backdrop.style.opacity = '0';
+                document.getElementById('menu-toggle').innerHTML = '☰';
+            }
+            resize();
+        });
+
+        // Zoom setup
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 50])
+            .on('zoom', (event) => {
+                transform = event.transform;
+                draw();
+            });
+
+        d3.select(canvas).call(zoom);
+
+        // Data processing
+
+
+        async function init() {
+            // Use statically loaded data from galaxy_history_data.js
+            if (typeof GALAXY_EVOLUTION === 'undefined' || GALAXY_EVOLUTION.length === 0) {
+                console.error("GALAXY_EVOLUTION data not found.");
+                alert("History data file not found or empty (results/galaxy_history_data.js).");
+                return;
+            }
+            console.log("Loaded static history data:", GALAXY_EVOLUTION.length, "snapshots");
+
+            // Fill Persona Legend structure
+            const leg = document.getElementById('persona-legend');
+            leg.innerHTML = '';
+            ["Revolutionary", "Philosopher", "Developer", "Investor", "Theologist", "Mixed"].forEach(name => {
+                const col = PALETTE.persona[name];
+                leg.innerHTML += `
+                    <div class="legend-item" id="legend-${name}">
+                        <div class="legend-info">
+                            <div class="legend-label-group">
+                                <div class="dot" style="background: ${col}"></div>
+                                <span>${name}</span>
+                            </div>
+                            <span class="legend-count" id="count-${name}">0</span>
+                        </div>
+                        <div class="legend-bar-container">
+                            <div class="legend-bar" id="bar-${name}" style="background: ${col}; width: 0%"></div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            if (typeof GALAXY_EVOLUTION !== 'undefined') {
+                processEvolutionData();
+            } else {
+                document.getElementById('timelapse-bar').style.display = 'none';
+            }
+
+            resize();
+            d3.select(canvas).call(zoom.transform, d3.zoomIdentity);
+
+            document.getElementById('loading-overlay').style.opacity = '0';
+            setTimeout(() => document.getElementById('loading-overlay').style.display = 'none', 500);
+
+            // Start Interpolation Loop
+            requestAnimationFrame(interpolationLoop);
+        }
+
+        let evolutionFrames = [];
+        let maxTimeIdx = 0;
+
+        function processEvolutionData() {
+            evolutionFrames = GALAXY_EVOLUTION;
+            maxTimeIdx = evolutionFrames.length - 1;
+
+            evolutionFrames.forEach(frame => {
+                frame.map = new Map();
+                frame.agents.forEach(a => frame.map.set(a.name, a));
+            });
+
+            // Generate Ticks
+            const tickContainer = document.getElementById('slider-ticks');
+            tickContainer.innerHTML = '';
+            for (let i = 0; i <= maxTimeIdx; i++) {
+                const tick = document.createElement('div');
+                tick.className = 'tick';
+                tick.id = `tick-${i}`;
+                tickContainer.appendChild(tick);
+            }
+
+            const slider = document.getElementById('time-slider');
+            slider.max = maxTimeIdx;
+            slider.value = maxTimeIdx;
+
+            slider.addEventListener('input', (e) => {
+                isPlaying = false;
+                document.getElementById('play-btn').textContent = '▶';
+                currentTimeIdx = parseInt(e.target.value);
+                updateTimeDisplay(currentTimeIdx);
+            });
+
+            currentTimeIdx = maxTimeIdx;
+            displayTimeIdx = maxTimeIdx;
+            updateTimeDisplay(currentTimeIdx);
+            updateStats(displayTimeIdx); // Fix initial bars being empty
+        }
+
+        function updateTimeDisplay(idx) {
+            const frameIdx = Math.round(idx);
+            if (evolutionFrames[frameIdx]) {
+                const tStr = evolutionFrames[frameIdx].timestamp;
+                document.getElementById('display-date').textContent = tStr.split(' ')[0];
+                document.getElementById('visible-count').textContent = evolutionFrames[frameIdx].agent_count.toLocaleString();
+
+                // Update Ticks
+                document.querySelectorAll('.tick').forEach(t => t.classList.remove('active'));
+                const activeTick = document.getElementById(`tick-${frameIdx}`);
+                if (activeTick) activeTick.classList.add('active');
+            }
+        }
+
+        // Animation Loop: displayTimeIdx chases currentTimeIdx
+        function interpolationLoop() {
+            const delta = currentTimeIdx - displayTimeIdx;
+            let needsDraw = false;
+
+            if (Math.abs(delta) > 0.001) {
+                // Smooth chase
+                displayTimeIdx += delta * 0.1;
+                updateStats(displayTimeIdx);
+                needsDraw = true;
+            } else if (Math.abs(delta) > 0) {
+                displayTimeIdx = currentTimeIdx;
+                updateStats(displayTimeIdx);
+                needsDraw = true;
+            }
+
+            // Continuous draw for highlight pulsation
+            if (targetAgent) {
+                needsDraw = true;
+            }
+
+            if (needsDraw) draw();
+
+            requestAnimationFrame(interpolationLoop);
+        }
+
+
+
+
+        // Helper to interpolate between two hex colors (robust 6-digit)
+        function interpolateColor(hexA, hexB, ratio) {
+            const rA = parseInt(hexA.slice(1, 3), 16);
+            const gA = parseInt(hexA.slice(3, 5), 16);
+            const bA = parseInt(hexA.slice(5, 7), 16);
+
+            const rB = parseInt(hexB.slice(1, 3), 16);
+            const gB = parseInt(hexB.slice(3, 5), 16);
+            const bB = parseInt(hexB.slice(5, 7), 16);
+
+            const r = Math.round(rA + (rB - rA) * ratio);
+            const g = Math.round(gA + (gB - gA) * ratio);
+            const b = Math.round(bA + (bB - bA) * ratio);
+
+            return `rgb(${r},${g},${b})`;
+        }
+
+        function updateStats(idxFloat) {
+            const idxA = Math.floor(idxFloat);
+            const idxB = Math.min(idxA + 1, maxTimeIdx);
+            const ratio = idxFloat - idxA;
+
+            const frameA = evolutionFrames[idxA];
+            const frameB = evolutionFrames[idxB];
+            if (!frameA || !frameB) return;
+
+            const personaOrder = ["Revolutionary", "Philosopher", "Developer", "Investor", "Theologist", "Mixed"];
+
+            // Calculate interpolated counts
+            const countsA = {};
+            const countsB = {};
+            personaOrder.forEach(p => { countsA[p] = 0; countsB[p] = 0; });
+
+            frameA.agents.forEach(a => { if (countsA[a.persona] !== undefined) countsA[a.persona]++; });
+            frameB.agents.forEach(a => { if (countsB[a.persona] !== undefined) countsB[a.persona]++; });
+
+            let maxCount = 0;
+            personaOrder.forEach(p => {
+                const interp = countsA[p] + (countsB[p] - countsA[p]) * ratio;
+                if (interp > maxCount) maxCount = interp;
+            });
+
+            personaOrder.forEach(p => {
+                const interp = countsA[p] + (countsB[p] - countsA[p]) * ratio;
+                const percent = maxCount > 0 ? (interp / maxCount) * 100 : 0;
+
+                document.getElementById(`count-${p}`).textContent = Math.round(interp).toLocaleString();
+                document.getElementById(`bar-${p}`).style.width = `${percent}%`;
+            });
+        }
+
+        function draw() {
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.save();
+            ctx.translate(transform.x, transform.y);
+            ctx.scale(transform.k, transform.k);
+            ctx.translate(width / 2, height / 2);
+
+            const dataScale = 5;
+            const idxA = Math.floor(displayTimeIdx);
+            const idxB = Math.min(idxA + 1, maxTimeIdx);
+            const ratio = displayTimeIdx - idxA;
+
+            const frameA = evolutionFrames[idxA];
+            const frameB = evolutionFrames[idxB];
+
+            if (!frameA) {
+                ctx.restore();
+                return;
+            }
+
+            const agentsToShow = new Set();
+            frameA.agents.forEach(a => agentsToShow.add(a.name));
+            if (frameB) frameB.agents.forEach(a => agentsToShow.add(a.name));
+
+            agentsToShow.forEach(name => {
+                const dataA = frameA.map.get(name);
+                const dataB = frameB ? frameB.map.get(name) : null;
+
+                let x, y, color, status, alpha = 1.0;
+
+                if (dataA && dataB) {
+                    x = dataA.x + (dataB.x - dataA.x) * ratio;
+                    y = dataA.y + (dataB.y - dataA.y) * ratio;
+                    status = dataA.status_index + (dataB.status_index - dataA.status_index) * ratio;
+
+                    const colA = PALETTE.persona[dataA.persona] || "#94a3b8";
+                    const colB = PALETTE.persona[dataB.persona] || "#94a3b8";
+                    color = (dataA.persona === dataB.persona) ? colB : interpolateColor(colA, colB, ratio);
+                } else if (dataA) {
+                    x = dataA.x; y = dataA.y; status = dataA.status_index;
+                    color = PALETTE.persona[dataA.persona] || "#94a3b8";
+                    alpha = 1.0 - ratio;
+                } else if (dataB) {
+                    x = dataB.x; y = dataB.y; status = dataB.status_index;
+                    color = PALETTE.persona[dataB.persona] || "#94a3b8";
+                    alpha = ratio;
+                }
+
+                const baseSize = 0.5 + (status * 0.82);
+                const r = baseSize / Math.sqrt(transform.k);
+
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = color;
+
+                if (status > 5) {
+                    ctx.shadowBlur = 4 * r;
+                    ctx.shadowColor = color;
+                } else {
+                    ctx.shadowBlur = 0;
+                }
+
+                ctx.beginPath();
+                ctx.arc(x * dataScale, y * dataScale, r, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (hoverAgent && hoverAgent.name === name) {
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 1 / transform.k;
+                    ctx.stroke();
+                }
+            });
+
+            // Draw Target Highlight (Pulsating Ring)
+            if (targetAgent) {
+                const dataA = frameA.map.get(targetAgent);
+                const dataB = frameB ? frameB.map.get(targetAgent) : null;
+
+                if (dataA || dataB) {
+                    let tx, ty, tAlpha = 1.0;
+                    if (dataA && dataB) {
+                        tx = dataA.x + (dataB.x - dataA.x) * ratio;
+                        ty = dataA.y + (dataB.y - dataA.y) * ratio;
+                    } else if (dataA) {
+                        tx = dataA.x; ty = dataA.y;
+                        tAlpha = 1.0 - ratio; // Fading out
+                    } else if (dataB) {
+                        tx = dataB.x; ty = dataB.y;
+                        tAlpha = ratio; // Fading in
+                    }
+
+                    if (tAlpha > 0.01) {
+                        // Pulsating Math
+                        const time = Date.now() / 300; // Speed
+                        const pulse = (Math.sin(time) + 1) / 2; // 0..1
+                        const radiusBase = 6 / Math.sqrt(transform.k);
+                        const radius = radiusBase + (pulse * (10 / Math.sqrt(transform.k)));
+
+                        ctx.globalAlpha = (0.8 - (pulse * 0.3)) * tAlpha;
+                        ctx.beginPath();
+                        ctx.arc(tx * dataScale, ty * dataScale, radius, 0, Math.PI * 2);
+                        ctx.lineWidth = 2 / transform.k;
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.stroke();
+
+                        // Second outer ring
+                        ctx.beginPath();
+                        ctx.arc(tx * dataScale, ty * dataScale, radius * 1.5, 0, Math.PI * 2);
+                        ctx.lineWidth = 1 / transform.k;
+                        ctx.strokeStyle = `rgba(255, 255, 255, ${(0.5 - pulse * 0.3) * tAlpha})`;
+                        ctx.stroke();
+                        ctx.globalAlpha = 1.0;
+                    }
+                }
+            }
+
+            ctx.restore();
+        }
+
+        // Hover detection
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+
+            const dataScale = 5;
+            let closest = null;
+            let minDist = Infinity;
+
+            const frameIdx = Math.round(displayTimeIdx);
+            const currentFrame = evolutionFrames[frameIdx];
+            if (!currentFrame) return;
+
+            for (let i = 0; i < currentFrame.agents.length; i++) {
+                const d = currentFrame.agents[i];
+                const sx = transform.x + transform.k * (width / 2 + d.x * dataScale);
+                const sy = transform.y + transform.k * (height / 2 + d.y * dataScale);
+
+                const baseSize = 0.5 + (d.status_index * 0.82);
+                const rScreen = (baseSize / Math.sqrt(transform.k)) * transform.k;
+                const hit = Math.max(8, rScreen);
+
+                const dist = Math.hypot(mx - sx, my - sy);
+                if (dist <= hit && dist < minDist) {
+                    minDist = dist;
+                    closest = d;
+                }
+            }
+
+            if (closest) {
+                hoverAgent = closest;
+                const viewport = document.getElementById('viewport');
+                const vrect = viewport.getBoundingClientRect();
+                const vx = e.clientX - vrect.left;
+                const vy = e.clientY - vrect.top;
+                showTooltip(vx, vy, closest);
+                canvas.style.cursor = 'pointer';
+            } else {
+                hoverAgent = null;
+                tooltip.style.display = 'none';
+                canvas.style.cursor = 'crosshair';
+            }
+            draw();
+        });
+
+        // Click to Focus (or Clear)
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+
+            const dataScale = 5;
+            let closest = null;
+            let minDist = Infinity;
+
+            const frameIdx = Math.round(displayTimeIdx);
+            const currentFrame = evolutionFrames[frameIdx];
+            if (!currentFrame) return;
+
+            for (let i = 0; i < currentFrame.agents.length; i++) {
+                const d = currentFrame.agents[i];
+                const sx = transform.x + transform.k * (width / 2 + d.x * dataScale);
+                const sy = transform.y + transform.k * (height / 2 + d.y * dataScale);
+
+                const baseSize = 0.5 + (d.status_index * 0.82);
+                const rScreen = (baseSize / Math.sqrt(transform.k)) * transform.k;
+                const hit = Math.max(8, rScreen);
+
+                const dist = Math.hypot(mx - sx, my - sy);
+                if (dist <= hit && dist < minDist) {
+                    minDist = dist;
+                    closest = d;
+                }
+            }
+
+            if (closest) {
+                flyTo(closest.name);
+            } else {
+                // Click on background: Clear selection
+                targetAgent = null;
+                hoverAgent = null;
+                searchInput.value = '';
+                tooltip.style.display = 'none';
+                draw();
+            }
+        });
+
+        function showTooltip(x, y, d) {
+            tooltip.style.display = 'block';
+            let left = x + 20;
+            let top = y + 20;
+            if (left + 220 > width) left = x - 220;
+            if (top + 180 > height) top = y - 180;
+
+            tooltip.style.left = left + 'px';
+            tooltip.style.top = top + 'px';
+
+            tooltip.innerHTML = `
+                <div class="tooltip-header">${d.name}</div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Persona</span>
+                    <span class="tooltip-value">${d.persona}</span>
+                </div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Status Index</span>
+                    <span class="tooltip-value" style="color: var(--gold)">${d.status_index.toFixed(2)}</span>
+                </div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Pagerank</span>
+                    <span class="tooltip-value">${d.pagerank ? d.pagerank.toFixed(6) : '0.000000'}</span>
+                </div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Interaction</span>
+                    <span class="tooltip-value">${d.interaction ? Math.round(d.interaction).toLocaleString() : '0'}</span>
+                </div>
+            `;
+        }
+
+        // Search logic
+        const searchInput = document.getElementById('agent-search');
+        const resultsBox = document.getElementById('search-results');
+        let currentFocus = -1;
+
+        searchInput.addEventListener('input', (e) => {
+            const val = e.target.value.toLowerCase();
+            currentFocus = -1; // Reset focus
+
+            if (val.length < 2) {
+                resultsBox.style.display = 'none';
+                return;
+            }
+
+            // Safety check for evolutionFrames
+            if (!evolutionFrames || evolutionFrames.length === 0) {
+                return;
+            }
+
+            const frameIdx = Math.round(displayTimeIdx);
+            const currentFrame = evolutionFrames[frameIdx];
+
+            if (!currentFrame || !currentFrame.agents) {
+                return;
+            }
+
+            const matches = currentFrame.agents
+                .filter(d => d.name && d.name.toLowerCase().includes(val))
+                .slice(0, 10);
+
+            if (matches.length > 0) {
+                resultsBox.innerHTML = matches.map((m, i) => `
+                    <div class="search-item" data-agent="${m.name.replace(/"/g, '&quot;')}" id="search-item-${i}">
+                        <b style="pointer-events: none;">${m.name}</b> <span style="font-size: 0.7rem; color: #94a3b8; pointer-events: none;">(${m.persona})</span>
+                    </div>
+                `).join('');
+                resultsBox.style.display = 'block';
+            } else {
+                resultsBox.style.display = 'none';
+            }
+        });
+
+        // Keyboard Navigation
+        searchInput.addEventListener('keydown', function (e) {
+            let x = resultsBox.getElementsByClassName('search-item');
+            if (e.keyCode == 40) { // Arrow Down
+                currentFocus++;
+                addActive(x);
+            } else if (e.keyCode == 38) { // Arrow Up
+                currentFocus--;
+                addActive(x);
+            } else if (e.keyCode == 13) { // Enter
+                e.preventDefault();
+                if (currentFocus > -1) {
+                    if (x) x[currentFocus].click();
+                }
+            }
+        });
+
+        function addActive(x) {
+            if (!x) return false;
+            removeActive(x);
+            if (currentFocus >= x.length) currentFocus = 0;
+            if (currentFocus < 0) currentFocus = (x.length - 1);
+            x[currentFocus].classList.add("autocomplete-active");
+            x[currentFocus].scrollIntoView({ block: "nearest" });
+        }
+
+        function removeActive(x) {
+            for (let i = 0; i < x.length; i++) {
+                x[i].classList.remove("autocomplete-active");
+            }
+        }
+
+        // Event delegation for search results
+        resultsBox.addEventListener('click', (e) => {
+            const target = e.target.closest('.search-item');
+            if (target && target.dataset.agent) {
+                flyTo(target.dataset.agent);
+            }
+        });
+
+        function flyTo(agentName) {
+            const frameIdx = Math.round(displayTimeIdx);
+            const currentFrame = evolutionFrames[frameIdx];
+            if (!currentFrame) return;
+
+            const agent = currentFrame.agents.find(d => d.name === agentName);
+            if (!agent) {
+                console.warn("Agent not found in current frame:", agentName);
+                return;
+            }
+
+            resultsBox.style.display = 'none';
+            searchInput.value = agentName;
+
+            // Set Highlight Target
+            targetAgent = agentName;
+            hoverAgent = agent; // Show tooltip immediately too
+
+            const dataScale = 5;
+            const k = 15;
+            const x = (width / 2) * (1 - k) - (agent.x * dataScale * k);
+            const y = (height / 2) * (1 - k) - (agent.y * dataScale * k);
+
+            const newTransform = d3.zoomIdentity.translate(x, y).scale(k);
+
+            d3.select(canvas).transition()
+                .duration(1500)
+                .call(zoom.transform, newTransform);
+        }
+        window.flyTo = flyTo;
+
+        // Playback Logic (Discrete Steps with Transition Time)
+        let lastStepTime = 0;
+        const STEP_DURATION = 1500; // ms per day during play
+
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            document.getElementById('play-btn').textContent = isPlaying ? "⏸" : "▶";
+            if (isPlaying) {
+                if (currentTimeIdx >= maxTimeIdx) {
+                    currentTimeIdx = 0;
+                    document.getElementById('time-slider').value = 0;
+                }
+                lastStepTime = Date.now();
+                playTick();
+            }
+        }
+        window.togglePlay = togglePlay;
+
+        function playTick() {
+            if (!isPlaying) return;
+
+            const now = Date.now();
+            if (now - lastStepTime > STEP_DURATION) {
+                if (currentTimeIdx < maxTimeIdx) {
+                    currentTimeIdx++;
+                    document.getElementById('time-slider').value = currentTimeIdx;
+                    updateTimeDisplay(currentTimeIdx);
+                    lastStepTime = now;
+                } else {
+                    isPlaying = false;
+                    document.getElementById('play-btn').textContent = "▶";
+                }
+            }
+
+            requestAnimationFrame(playTick);
+        }
+
+        // Init
+        window.onload = init;
+    </script>
+</body>
+
+</html>

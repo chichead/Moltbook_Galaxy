@@ -21,16 +21,11 @@ def export_galaxy():
     coords_df = pd.read_csv(COORDINATES_CSV)
 
     # Filter out Observers
-    # master_df = master_df[master_df['persona'] != 'Observer']
+    master_df = master_df[master_df['persona'] != 'Observer']
 
     # Merge on agent name
     merged = pd.merge(master_df, coords_df, on="agent", how="inner")
     
-    # Calculate max radius of non-observer agents to define Outer Rim
-    max_r = 0
-    for row in merged.itertuples():
-        if row.persona != 'Observer':
-            
     # Hardcoded Core Radius to prevent runaway expansion
     # Based on t-SNE results, core is within ~105
     max_r = 105.0 
@@ -77,10 +72,21 @@ def export_galaxy():
         
     print(f"Repositioned {obs_moved} Observers to Outer Rim.")
 
+    # Metadata for UI
+    total_count = len(coords_df) # Original count before persona filtering
+    visualized_count = len(stars)
+    metadata = {
+        "total": total_count,
+        "visualized": visualized_count
+    }
+
     # Export to JS
     with open(OUTPUT_JS, "w", encoding="utf-8") as f:
         f.write("const GALAXY_DATA = ")
         json.dump(stars, f, ensure_ascii=False)
+        f.write(";\n")
+        f.write("const GALAXY_METADATA = ")
+        json.dump(metadata, f, ensure_ascii=False)
         f.write(";")
         
     print(f"Done! {len(stars)} agents exported to {OUTPUT_JS}")

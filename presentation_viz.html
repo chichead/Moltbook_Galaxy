@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moltbook Presentation Mode</title>
+    <!-- D3 for Zoom/Pan Logic -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Load Galaxy Data -->
+    <script src="galaxy_data.js"></script>
+
+    <style>
+        :root {
+            --bg-deep: #000000;
+            --text-primary: #f8fafc;
+            --accent: #38bdf8;
+        }
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-deep);
+            color: var(--text-primary);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+        }
+
+        #viewport {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            background: radial-gradient(circle at center, #0a0f1d 0%, #000000 100%);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-deep);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            transition: opacity 0.8s ease-in-out;
+        }
+
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 2px solid #1e293b;
+            border-bottom-color: var(--accent);
+            border-radius: 50%;
+            animation: rotation 1.5s linear infinite;
+        }
+
+        @keyframes rotation {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="loading-overlay">
+        <div class="loader"></div>
+    </div>
+
+    <main id="viewport">
+        <canvas id="galaxy-canvas"></canvas>
+    </main>
+
+    <script>
+        // Configuration
+        const PALETTE = {
+            "Revolutionary": "#ef476f",
+            "Philosopher": "#ffd166",
+            "Developer": "#06d6a0",
+            "Investor": "#118ab2",
+            "Theologist": "#9b5de5",
+            "Mixed": "#4b5563"
+        };
+
+        const canvas = document.getElementById('galaxy-canvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        let width, height;
+        let transform = d3.zoomIdentity;
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width * window.devicePixelRatio;
+            canvas.height = height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            draw();
+        }
+
+        window.addEventListener('resize', resize);
+
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 100])
+            .on('zoom', (event) => {
+                transform = event.transform;
+                draw();
+            });
+
+        d3.select(canvas).call(zoom);
+
+        function init() {
+            resize();
+
+            // Initialization: Center the (0,0) data point on the screen center
+            // Data coordinates are roughly -100 to 100. Base Scale: 5x
+            // Default View: Center (0,0) with zoom level 0.8 to fit everything (wider view)
+            const initialK = 0.8;
+            const initialX = (width / 2);
+            const initialY = (height / 2);
+
+            d3.select(canvas).call(zoom.transform, d3.zoomIdentity.translate(initialX, initialY).scale(initialK));
+
+            setTimeout(() => {
+                document.getElementById('loading-overlay').style.opacity = '0';
+                setTimeout(() => document.getElementById('loading-overlay').style.display = 'none', 800);
+            }, 1000);
+
+            draw();
+        }
+
+        function draw() {
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.save();
+            // Global Zoom/Pan (includes the centering translation from init)
+            ctx.translate(transform.x, transform.y);
+            ctx.scale(transform.k, transform.k);
+
+            // NO INNER TRANSLATE HERE - The transformation should be handled by D3 zoom identity
+
+            const dataScale = 5;
+
+            for (let i = 0; i < GALAXY_DATA.length; i++) {
+                const d = GALAXY_DATA[i];
+                const x = d.x * dataScale;
+                const y = d.y * dataScale;
+                const color = PALETTE[d.p] || "#4b5563";
+
+                // Dynamic size based on scale
+                let baseSize = 0.4 + (d.s * 0.7);
+                const r = baseSize / Math.sqrt(transform.k);
+
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+
+                // High-influence glow
+                if (d.s > 8) {
+                    ctx.shadowBlur = 10 * r;
+                    ctx.shadowColor = color;
+                } else {
+                    ctx.shadowBlur = 0;
+                }
+
+                ctx.fillStyle = color;
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        // Camera Control API for recording
+        window.camera = {
+            flyTo: function (agentId, zoomLevel = 15, duration = 2000) {
+                const agent = GALAXY_DATA.find(d => d.id === agentId);
+                if (!agent) return;
+
+                const dataScale = 5;
+                const k = zoomLevel;
+                // Center target = (width/2, height/2)
+                // Screen = transform.k * data + transform.x
+                // transform.x = width/2 - (k * data.x)
+                const x = (width / 2) - (agent.x * dataScale * k);
+                const y = (height / 2) - (agent.y * dataScale * k);
+
+                const newTransform = d3.zoomIdentity.translate(x, y).scale(k);
+
+                d3.select(canvas).transition()
+                    .duration(duration)
+                    .ease(d3.easeCubicInOut)
+                    .call(zoom.transform, newTransform);
+            },
+            reset: function (duration = 2000) {
+                const initialK = 0.8;
+                const initialX = (width / 2);
+                const initialY = (height / 2);
+
+                const newTransform = d3.zoomIdentity.translate(initialX, initialY).scale(initialK);
+
+                d3.select(canvas).transition()
+                    .duration(duration)
+                    .ease(d3.easeCubicInOut)
+                    .call(zoom.transform, newTransform);
+            },
+            zoomBy: function (factor, duration = 1000) {
+                d3.select(canvas).transition()
+                    .duration(duration)
+                    .call(zoom.scaleBy, factor);
+            }
+        };
+
+        window.onload = init;
+    </script>
+</body>
+
+</html>

@@ -1,36 +1,24 @@
-# Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-*.egg-info/
-
-# Data files (large CSV files)
-data/*.csv
-data/*.json
-data/*.js
-data/*.db
-*.db
-
-# OS files
+*.pyc
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
+.env
+venv/
+legacy_archive/
+*.db*
+*.bak
+!data/moltbook.db
 
-# IDE
+# Project Clutter
+archives/
+migration_log_v*.txt
+temp_source.db
 .vscode/
-.idea/
-*.swp
-*.swo
+.gemini/
+*.pdf
+*.webp
+*.png
+!results/*.png
+!snapshot_tool/results/evolution/**/*.png
 
-# Logs
-*.log
-
-# Temporary files
-tmp/
-temp/
+# History Data (Required for Web)
+!results/galaxy_history_data.js
