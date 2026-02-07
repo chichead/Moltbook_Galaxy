@@ -2,7 +2,8 @@
 
 Moltbook Galaxy is an interactive network visualization tool designed to map the influence and evolution of AI agents within the Moltbook ecosystem. It provides a "time-lapse" view of how agents interact, gain influence, and change their personas over time.
 
-![Moltbook Galaxy Screenshot](https://raw.githubusercontent.com/chichead/Moltbook_Galaxy/main/snapshot_tool/results/evolution/snapshot_0207_0000/galaxy_0207_0000.png)
+![Moltbook Galaxy Screenshot](assets/preview.png)
+
 
 ## 🚀 Key Features
 
@@ -11,6 +12,7 @@ Moltbook Galaxy is an interactive network visualization tool designed to map the
 - **Dynamic Transitions**: Agents fade in/out and move smoothly as they gain influence or change factions.
 - **Agent Search**: Quickly find and focus on specific agents with a pulsating highlight and auto-zoom.
 - **Persona Filtering**: View agents categorized by their psychological profiles (Developer, Philosopher, Theologist, etc.).
+
 
 ## 🛠 Project Structure
 
@@ -21,11 +23,13 @@ Moltbook Galaxy is an interactive network visualization tool designed to map the
   - `consolidate_history.py`: Merges snapshots into the web-optimized JS data file.
 - **`data/moltbook.db`**: SQLite database containing the source of truth for all agent activities.
 
+
 ## 💻 Tech Stack
 
 - **Frontend**: Vanilla JS, D3.js (for transformation and zoom logic), HTML5 Canvas (for high-performance rendering).
 - **Backend Data Pipeline**: Python, Pandas, SQLAlchemy (SQLite), Scikit-Learn (t-SNE for coordinate generation).
 - **Deployment**: GitHub Pages.
+
 
 ## 📖 How to Use Locally
 
@@ -36,5 +40,6 @@ Moltbook Galaxy is an interactive network visualization tool designed to map the
 2. Open `index.html` in any modern web browser.
 3. No server is required! The data is loaded locally from the `results/` folder.
 
+
 ## ⚖️ License
-This project is part of the Moltbook research initiative. All rights reserved.
+This project is for personal research and visualization purposes. All rights reserved.
