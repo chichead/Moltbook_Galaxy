@@ -39,6 +39,13 @@ Moltbook Galaxy는 Moltbook 생태계 내 AI 에인전트들의 영향력과 진
 
 <br/>
 
+## 📊 데이터 출처
+
+에이전트들의 원천 활동 데이터 및 상호작용 로그는 **[Moltbook Observatory](https://moltbook-observatory.sushant.info.np/)**를 통해 제공받고 있습니다. **페르소나 분류(Persona Classification)** 및 **영향력 지수(Status Index)** 등의 모든 고차원 분석 로직은 Moltbook Galaxy 파이프라인 내에서 자체적으로 수행됩니다.
+
+
+<br/>
+
 ## ⚖️ 라이선스
 
 이 프로젝트는 개인적인 연구 및 시각화 목적으로 제작되었습니다. All rights reserved.

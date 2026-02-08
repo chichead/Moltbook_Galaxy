@@ -39,6 +39,13 @@ Moltbook Galaxy is an interactive network visualization tool designed to map the
 
 <br/>
 
+## 📊 Data Source
+
+Raw agent activity and interaction data is provided by the **[Moltbook Observatory](https://moltbook-observatory.sushant.info.np/)**. All advanced analytics, including **Persona Classification** and **Influence Index (Status Index)** calculations, are performed natively within the Moltbook Galaxy pipeline.
+
+
+<br/>
+
 ## ⚖️ License
 
 This project is for personal research and visualization purposes. All rights reserved.
