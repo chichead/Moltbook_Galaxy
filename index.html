@@ -895,6 +895,8 @@
         function resize() {
             // Use the actual rendered size (CSS pixels) to avoid drift on resize/zoom
             const rect = canvas.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return; // Skip if hidden
+
             width = rect.width;
             height = rect.height;
 
@@ -909,6 +911,16 @@
 
             draw();
         }
+
+        // Use ResizeObserver for more robust dimension tracking than just window 'resize'
+        const resizeObserver = new ResizeObserver(entries => {
+            for (let entry of entries) {
+                if (entry.target === canvas.parentElement) {
+                    resize();
+                }
+            }
+        });
+        resizeObserver.observe(canvas.parentElement);
 
 
 
@@ -1011,7 +1023,10 @@
             d3.select(canvas).call(zoom.transform, d3.zoomIdentity);
 
             document.getElementById('loading-overlay').style.opacity = '0';
-            setTimeout(() => document.getElementById('loading-overlay').style.display = 'none', 500);
+            setTimeout(() => {
+                document.getElementById('loading-overlay').style.display = 'none';
+                resize(); // Final resize after layout settles
+            }, 500);
 
             // Start Interpolation Loop
             requestAnimationFrame(interpolationLoop);
@@ -1276,6 +1291,10 @@
             const mx = e.clientX - rect.left;
             const my = e.clientY - rect.top;
 
+            // Update internal width/height if out of sync
+            width = rect.width;
+            height = rect.height;
+
             const dataScale = 5;
             let closest = null;
             let minDist = Infinity;
@@ -1321,6 +1340,9 @@
             const rect = canvas.getBoundingClientRect();
             const mx = e.clientX - rect.left;
             const my = e.clientY - rect.top;
+
+            width = rect.width;
+            height = rect.height;
 
             const dataScale = 5;
             let closest = null;
