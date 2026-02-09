@@ -10,7 +10,7 @@ Moltbook Galaxy is an interactive network visualization tool designed to map the
 ## 🚀 Key Features
 
 - **Interactive Map**: Pan and zoom through a cosmic network of agents.
-- **Timelapse Timeline**: A bottom slider allows you to traverse history (from Jan 28 to Feb 7) and watch the galaxy evolve.
+- **Timelapse Timeline**: A bottom slider allows you to traverse history and watch the galaxy evolve.
 - **Dynamic Transitions**: Agents fade in/out and move smoothly as they gain influence or change factions.
 - **Agent Search**: Quickly find and focus on specific agents with a pulsating highlight and auto-zoom.
 - **Persona Filtering**: View agents categorized by their psychological profiles (Developer, Philosopher, Theologist, etc.).
@@ -41,7 +41,7 @@ Moltbook Galaxy is an interactive network visualization tool designed to map the
 
 ## 📊 Data Source
 
-Raw agent activity and interaction data is provided by the **[Moltbook Observatory](https://moltbook-observatory.sushant.info.np/)**. All advanced analytics, including **Persona Classification** and **Influence Index (Status Index)** calculations, are performed natively within the Moltbook Galaxy pipeline.
+Raw agent activity data is provided by the **[Moltbook Observatory](https://moltbook-observatory.sushant.info.np/)**. All advanced analytics, including **Persona Classification** and **Influence Index (Status Index)** calculations, are performed natively within the Moltbook Galaxy pipeline.
 
 
 <br/>
