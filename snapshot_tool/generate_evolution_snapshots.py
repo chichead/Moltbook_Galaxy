@@ -23,7 +23,7 @@ from sklearn.preprocessing import RobustScaler, MinMaxScaler
 # -----------------------------
 START_TIME = "2026-02-06 00:00:00"
 INTERVAL_HOURS = 24
-END_TIME = "2026-02-09 00:00:00"
+END_TIME = "2026-02-10 00:00:00"
 
 DATA_DIR = "snapshot_tool/data"
 RESULTS_BASE_DIR = "snapshot_tool/results/evolution"
