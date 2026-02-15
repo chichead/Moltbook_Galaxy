@@ -31,7 +31,7 @@ def main():
             continue
 
         print(f"  - Processing {timestamp}...")
-        df = pd.read_csv(csv_path)
+        df = pd.read_csv(csv_path, low_memory=False)
         
         # Select essential columns
         # Some older versions might have slightly different names (name vs agent), handling both
