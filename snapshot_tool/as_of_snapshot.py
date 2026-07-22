@@ -7,7 +7,6 @@ Slices data at 2026-02-02 22:00:00 and runs the full analysis.
 import os
 import re
 import math
-import sqlite3
 import pandas as pd
 import numpy as np
 import networkx as nx
@@ -18,6 +17,9 @@ from typing import Dict, List, Optional, Tuple
 
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import RobustScaler, MinMaxScaler
+from sqlalchemy import text
+
+from src.database import create_sqlite_engine
 
 # -----------------------------
 # Config & Cutoff
@@ -26,6 +28,7 @@ CUTOFF_TIME = "2026-02-02 22:00:00"
 RESULTS_DIR = "results/snapshot_20260202_2200"
 DATA_DIR = "data"
 DB_PATH = os.path.join(DATA_DIR, "moltbook.db")
+DB_ENGINE = create_sqlite_engine(DB_PATH)
 
 # Analysis Constants (v3)
 CHUNKSIZE = 50_000
@@ -65,18 +68,16 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 
 def load_filtered_data():
     print(f"[INFO] Filtering data as of {CUTOFF_TIME}...")
-    conn = sqlite3.connect(DB_PATH)
-    
-    # Filter Agents: Only those created at or before cutoff
-    agents_df = pd.read_sql_query(f"SELECT name, description, karma, follower_count, following_count FROM agents WHERE created_at <= '{CUTOFF_TIME}'", conn)
-    
-    # Filter Posts: Only those created at or before cutoff
-    posts_df = pd.read_sql_query(f"SELECT id, agent_name, title, content, score, comment_count, created_at FROM posts WHERE created_at <= '{CUTOFF_TIME}'", conn)
-    
-    # Filter Comments: Only those created at or before cutoff
-    comments_df = pd.read_sql_query(f"SELECT post_id, agent_name, created_at FROM comments WHERE created_at <= '{CUTOFF_TIME}'", conn)
-    
-    conn.close()
+    params = {"cutoff": CUTOFF_TIME}
+    with DB_ENGINE.connect() as connection:
+        # Filter Agents: Only those created at or before cutoff
+        agents_df = pd.read_sql_query(text("SELECT name, description, karma, follower_count, following_count FROM agents WHERE created_at <= :cutoff"), connection, params=params)
+
+        # Filter Posts: Only those created at or before cutoff
+        posts_df = pd.read_sql_query(text("SELECT id, agent_name, title, content, score, comment_count, created_at FROM posts WHERE created_at <= :cutoff"), connection, params=params)
+
+        # Filter Comments: Only those created at or before cutoff
+        comments_df = pd.read_sql_query(text("SELECT post_id, agent_name, created_at FROM comments WHERE created_at <= :cutoff"), connection, params=params)
     
     print(f"  - Agents: {len(agents_df)}")
     print(f"  - Posts: {len(posts_df)}")

@@ -7,7 +7,6 @@ Uses Feb 5th web coordinates as a master anchor for visual continuity.
 import os
 import re
 import math
-import sqlite3
 import pandas as pd
 import numpy as np
 import networkx as nx
@@ -16,6 +15,9 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import RobustScaler, MinMaxScaler
+from sqlalchemy import text
+
+from src.database import create_sqlite_engine
 
 # -----------------------------
 # Config
@@ -25,6 +27,7 @@ DATA_DIR = "data"
 RESULTS_DIR = "results/snapshot_0206_0000"
 DB_PATH = os.path.join(DATA_DIR, "moltbook.db")
 WEB_COORD_PATH = "results/agent_coordinates_0205_0949.csv"
+DB_ENGINE = create_sqlite_engine(DB_PATH)
 
 # Analysis Constants (v3)
 RANDOM_SEED = 42
@@ -70,16 +73,16 @@ PATTERNS = {p: re.compile(r"\b(?:" + "|".join([re.escape(k) for k in kws]) + r")
 # -----------------------------
 
 def load_data_at(cutoff):
-    conn = sqlite3.connect(DB_PATH)
-    agents_query = f"""
+    agents_query = text("""
         SELECT name, description, karma, follower_count, following_count 
         FROM agents 
-        WHERE COALESCE(NULLIF(created_at, ''), first_seen_at) <= '{cutoff}'
-    """
-    agents = pd.read_sql_query(agents_query, conn)
-    posts = pd.read_sql_query(f"SELECT id, agent_name, title, content, score, comment_count, created_at FROM posts WHERE created_at <= '{cutoff}'", conn)
-    comments = pd.read_sql_query(f"SELECT post_id, agent_name, created_at FROM comments WHERE created_at <= '{cutoff}'", conn)
-    conn.close()
+        WHERE COALESCE(NULLIF(created_at, ''), first_seen_at) <= :cutoff
+    """)
+    params = {"cutoff": cutoff}
+    with DB_ENGINE.connect() as connection:
+        agents = pd.read_sql_query(agents_query, connection, params=params)
+        posts = pd.read_sql_query(text("SELECT id, agent_name, title, content, score, comment_count, created_at FROM posts WHERE created_at <= :cutoff"), connection, params=params)
+        comments = pd.read_sql_query(text("SELECT post_id, agent_name, created_at FROM comments WHERE created_at <= :cutoff"), connection, params=params)
     return agents, posts, comments
 
 def analyze_influence(agents, posts, comments):

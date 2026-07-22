@@ -7,7 +7,6 @@ Identical to archives/analyze_personas_chatgpt.py
 import os
 import re
 import math
-import sqlite3
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -19,6 +18,9 @@ from datetime import datetime, timedelta
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import RobustScaler, MinMaxScaler
 from sklearn.neighbors import NearestNeighbors
+from sqlalchemy import text
+
+from database import create_sqlite_engine
 
 # -----------------------------
 # Config (Adjusted for Snapshot Tool Path)
@@ -157,9 +159,10 @@ def accumulate_post_counts(posts_csv: str, db_path: str, chunksize: int) -> pd.D
         iterator = pd.read_csv(posts_csv, usecols=["agent_name", "title", "content"], chunksize=chunksize)
     else:
         print(f"[INFO] Loading posts from DB: {db_path}")
-        con = sqlite3.connect(db_path)
-        q = "SELECT agent_name, title, content FROM posts"
-        iterator = pd.read_sql_query(q, con, chunksize=chunksize)
+        engine = create_sqlite_engine(db_path)
+        connection = engine.connect()
+        q = text("SELECT agent_name, title, content FROM posts")
+        iterator = pd.read_sql_query(q, connection, chunksize=chunksize)
 
     persona_cols = list(PERSONA_KEYWORDS.keys())
     acc = pd.DataFrame(columns=persona_cols + ["post_words"], dtype=float)
@@ -175,6 +178,8 @@ def accumulate_post_counts(posts_csv: str, db_path: str, chunksize: int) -> pd.D
         g = tmp.groupby("agent_name", as_index=True)[persona_cols + ["post_words"]].sum()
         acc = acc.add(g, fill_value=0)
         if i % 10 == 0: print(f"[INFO] processed {i * chunksize:,} rows (chunks={i})")
+    if not os.path.exists(posts_csv):
+        connection.close()
     acc.index.name = "agent_name"
     acc.reset_index(inplace=True)
     return acc

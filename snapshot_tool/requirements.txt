@@ -1,0 +1,6 @@
+matplotlib
+networkx
+numpy
+pandas
+scikit-learn
+SQLAlchemy>=2.0,<3.0

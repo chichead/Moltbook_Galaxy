@@ -5,13 +5,15 @@ Identical to archives/analyze_moltbook_chatgpt.py
 """
 
 import os
-import sqlite3
 import math
 import json
 import pandas as pd
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
+from sqlalchemy import text
+
+from database import create_sqlite_engine
 from datetime import datetime, timedelta
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -108,20 +110,21 @@ def build_agent_leaderboard(agents: pd.DataFrame, comment_nodes: pd.DataFrame, t
 
 def main():
     print("[INFO] Starting Influence Analysis (v3 verbatim logic)...")
-    conn = sqlite3.connect(cfg.db_path)
-    posts = pd.read_sql_query("SELECT id, agent_name FROM posts", conn)
-    try: db_comments = pd.read_sql_query("SELECT post_id, agent_name FROM comments", conn)
-    except: db_comments = None
-    agents = pd.read_sql_query("SELECT name, karma, follower_count, following_count FROM agents", conn)
-    conn.close()
+    engine = create_sqlite_engine(cfg.db_path)
+    with engine.connect() as connection:
+        posts = pd.read_sql_query(text("SELECT id, agent_name FROM posts"), connection)
+        try:
+            db_comments = pd.read_sql_query(text("SELECT post_id, agent_name FROM comments"), connection)
+        except Exception:
+            db_comments = None
+        agents = pd.read_sql_query(text("SELECT name, karma, follower_count, following_count FROM agents"), connection)
 
     # Detect the latest timestamp from data to use for filename versioning
     print("[INFO] Detecting latest data timestamp for versioning...")
     # Load timestamps from DB
-    conn = sqlite3.connect(cfg.db_path)
-    latest_p = pd.read_sql_query("SELECT MAX(created_at) as ts FROM posts", conn).iloc[0]['ts']
-    latest_c = pd.read_sql_query("SELECT MAX(created_at) as ts FROM comments", conn).iloc[0]['ts']
-    conn.close()
+    with engine.connect() as connection:
+        latest_p = pd.read_sql_query(text("SELECT MAX(created_at) as ts FROM posts"), connection).iloc[0]['ts']
+        latest_c = pd.read_sql_query(text("SELECT MAX(created_at) as ts FROM comments"), connection).iloc[0]['ts']
     
     latest_dt = pd.to_datetime(max(latest_p, latest_c))
     latest_kst = latest_dt + timedelta(hours=9)
